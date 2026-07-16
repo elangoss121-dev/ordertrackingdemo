@@ -1,36 +1,89 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Order Tracking SaaS — Next.js + Neon + Prisma + Firebase
+
+A secure, lightning-fast, production-ready Order Tracking SaaS built with **Next.js 15 (App Router)**, **Prisma ORM**, **Neon PostgreSQL**, **Firebase Authentication**, **Tailwind CSS v4**, and **Framer Motion**.
+
+---
+
+## Features
+
+- **Apple-Inspired Design**: Rounded glassmorphism cards, premium typography (Inter/Geist), and soft shadows.
+- **Dynamic Naming Logic**: Month Code + YY + DD + Order Number formatting with automatic suffix conflict resolution (`-1`, `-2`).
+- **Role-Based Access Control**: Middleware protects routes (Admins cannot access user workspaces; Users cannot access admin consoles).
+- **Public & Private Search**: Anyone can look up packages by ID instantly. Logged-in users automatically see their active shipment collections.
+- **Admin Dashboard**: Create shipments, update courier logs, append infinite timeline checkpoints, view chart breakdowns (Recharts), and export CSVs.
+- **Interactive Progress Bar**: Visual tracker indicating stages from Packing to final Delivery checkpoints.
+
+---
+
+## Technical Stack
+
+- **Framework**: Next.js 15 (App Router, Server Actions)
+- **Styling**: Tailwind CSS v4, Lucide Icons, Framer Motion
+- **Database**: Neon Serverless PostgreSQL
+- **ORM**: Prisma ORM
+- **Auth**: Firebase Auth Client (Google Login) + JSON Web Tokens (JWT) for secure session headers
+- **Forms**: React Hook Form + Zod validation schemas
+
+---
 
 ## Getting Started
 
-First, run the development server:
+### 1. Prerequisites
+
+- Node.js (v18.x or newer)
+- A **Neon PostgreSQL** account ([neon.tech](https://neon.tech))
+- A **Firebase Project** with Google Auth provider enabled ([console.firebase.google.com](https://console.firebase.google.com))
+
+### 2. Environment Variables
+
+Create a `.env` file in the root directory (you can copy `.env.example` as a template):
+
+```bash
+cp .env.example .env
+```
+
+Fill in your connection pooling and direct database URIs, JWT signing secret, and Firebase config metrics.
+
+### 3. Installation
+
+Install all required node modules:
+
+```bash
+npm install
+```
+
+### 4. Database Setup & Seeding
+
+Sync your schema with Neon and seed the initial Admin account:
+
+```bash
+# Push schema schemas
+npx prisma db push
+
+# Generate client
+npx prisma generate
+
+# Seed admin user (admin@ordertracking.com / Admin@1234)
+npx tsx prisma/seed.ts
+```
+
+### 5. Running the Application
+
+Launch the local Next.js development server:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) in your browser to view the application.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Production Deployment
 
-## Learn More
+### Vercel Deployment
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. Set up a new project on Vercel importing this GitHub repository.
+2. Add all environment variables defined in `.env.example` to the Vercel Project Settings.
+3. Configure the build command as `prisma generate && next build`.
+4. Deploy with confidence.
