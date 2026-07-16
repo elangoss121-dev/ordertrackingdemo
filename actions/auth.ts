@@ -1,10 +1,14 @@
 "use server";
 
-import { prisma } from "@/lib/prisma";
 import { hashPassword, verifyPassword, createSession, destroySession } from "@/lib/auth";
 import { registerSchema, loginSchema } from "@/lib/validations";
 import { authRateLimiter } from "@/lib/rate-limit";
 import { sanitizeInput } from "@/lib/utils";
+
+async function getPrisma() {
+  const { prisma } = await import("@/lib/prisma");
+  return prisma;
+}
 
 export async function register(formData: {
   name: string;
@@ -13,6 +17,8 @@ export async function register(formData: {
   confirmPassword: string;
 }) {
   try {
+    const prisma = await getPrisma();
+
     const validated = registerSchema.safeParse(formData);
     if (!validated.success) {
       return { success: false, error: validated.error.issues[0].message };
@@ -55,6 +61,8 @@ export async function register(formData: {
 
 export async function login(formData: { email: string; password: string }) {
   try {
+    const prisma = await getPrisma();
+
     const validated = loginSchema.safeParse(formData);
     if (!validated.success) {
       return { success: false, error: validated.error.issues[0].message };
@@ -104,6 +112,8 @@ export async function googleLogin(data: {
   firebaseUid: string;
 }) {
   try {
+    const prisma = await getPrisma();
+
     const { name, email, photo, firebaseUid } = data;
 
     let user = await prisma.user.findUnique({
@@ -166,6 +176,8 @@ export async function logout() {
 
 export async function forgotPassword(formData: { email: string }) {
   try {
+    const prisma = await getPrisma();
+
     const user = await prisma.user.findUnique({
       where: { email: formData.email.toLowerCase().trim() },
     });

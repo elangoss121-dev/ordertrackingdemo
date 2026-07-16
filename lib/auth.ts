@@ -1,7 +1,11 @@
 import { SignJWT, jwtVerify } from "jose";
 import { hash, compare } from "bcryptjs";
 import { cookies } from "next/headers";
-import { prisma } from "./prisma";
+
+async function getPrisma() {
+  const { prisma } = await import("./prisma");
+  return prisma;
+}
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || "fallback-secret-change-in-production"
@@ -42,6 +46,8 @@ export async function verifyToken(token: string) {
 }
 
 export async function createSession(userId: string) {
+  const prisma = await getPrisma();
+
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { id: true, email: true, role: true },
@@ -87,6 +93,8 @@ export async function getCurrentUser() {
     const payload = await verifyToken(token);
     if (!payload) return null;
 
+    const prisma = await getPrisma();
+
     const session = await prisma.session.findUnique({
       where: { token },
       include: {
@@ -123,6 +131,7 @@ export async function destroySession() {
     const token = cookieStore.get("session-token")?.value;
 
     if (token) {
+      const prisma = await getPrisma();
       await prisma.session.deleteMany({ where: { token } });
       cookieStore.delete("session-token");
     }
