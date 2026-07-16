@@ -1,6 +1,6 @@
 "use server";
 
-import { hashPassword, verifyPassword, createSession, destroySession } from "@/lib/auth";
+import { hashPassword, verifyPassword, createSession, destroySession, getCurrentUser } from "@/lib/auth";
 import { registerSchema, loginSchema } from "@/lib/validations";
 import { authRateLimiter, loginFailureLimiter, recordLoginFailure, clearLoginFailures } from "@/lib/rate-limit";
 import { sanitizeInput } from "@/lib/utils";
@@ -21,13 +21,14 @@ export async function register(formData: {
 
     const failureCheck = loginFailureLimiter(formData.email);
     if (!failureCheck.success) {
-      return { success: false, error: `Too many failed attempts. Try again in ${failureCheck.resetInSec} seconds.` };
+      return { success: false, error: `Too many failed attempts. Try again in ${failureCheck.resetInSec} seconds.`, lockoutSeconds: failureCheck.resetInSec };
     }
 
     const validated = registerSchema.safeParse(formData);
     if (!validated.success) {
       recordLoginFailure(formData.email);
-      return { success: false, error: validated.error.issues[0].message };
+      const postFailCheck = loginFailureLimiter(formData.email);
+      return { success: false, error: validated.error.issues[0].message, lockoutSeconds: !postFailCheck.success ? postFailCheck.resetInSec : 0 };
     }
 
     const { name, email, password } = validated.data;
@@ -44,7 +45,8 @@ export async function register(formData: {
 
     if (existingUser) {
       recordLoginFailure(email);
-      return { success: false, error: "An account with this email already exists." };
+      const postFailCheck = loginFailureLimiter(email);
+      return { success: false, error: "An account with this email already exists.", lockoutSeconds: !postFailCheck.success ? postFailCheck.resetInSec : 0 };
     }
 
     const hashedPassword = await hashPassword(password);
@@ -80,7 +82,7 @@ export async function login(formData: { email: string; password: string }) {
 
     const failureCheck = loginFailureLimiter(email);
     if (!failureCheck.success) {
-      return { success: false, error: `Too many wrong password attempts. Try again in ${failureCheck.resetInSec} seconds.` };
+      return { success: false, error: `Too many wrong password attempts. Try again in ${failureCheck.resetInSec} seconds.`, lockoutSeconds: failureCheck.resetInSec };
     }
 
     const rateCheck = authRateLimiter(email);
@@ -94,13 +96,15 @@ export async function login(formData: { email: string; password: string }) {
 
     if (!user || !user.password) {
       recordLoginFailure(email);
-      return { success: false, error: "Invalid email or password." };
+      const postFailCheck = loginFailureLimiter(email);
+      return { success: false, error: "Invalid email or password.", lockoutSeconds: !postFailCheck.success ? postFailCheck.resetInSec : 0 };
     }
 
     const isValid = await verifyPassword(password, user.password);
     if (!isValid) {
       recordLoginFailure(email);
-      return { success: false, error: "Invalid email or password." };
+      const postFailCheck = loginFailureLimiter(email);
+      return { success: false, error: "Invalid email or password.", lockoutSeconds: !postFailCheck.success ? postFailCheck.resetInSec : 0 };
     }
 
     clearLoginFailures(email);
@@ -219,5 +223,53 @@ export async function forgotPassword(formData: { email: string }) {
     return { success: true, message: "If an account exists, a reset link has been sent." };
   } catch {
     return { success: false, error: "Something went wrong." };
+  }
+}
+
+export async function changePasswordAction(formData: {
+  oldPassword: string;
+  newPassword: string;
+  confirmNewPassword: string;
+}) {
+  try {
+    const prisma = await getPrisma();
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, error: "Password change failed." };
+    }
+
+    const dbUser = await prisma.user.findUnique({
+      where: { id: user.id },
+    });
+
+    if (!dbUser || !dbUser.password) {
+      return { success: false, error: "Password change failed." };
+    }
+
+    const { oldPassword, newPassword, confirmNewPassword } = formData;
+
+    if (newPassword !== confirmNewPassword) {
+      return { success: false, error: "Password change failed." };
+    }
+
+    if (newPassword.length < 8) {
+      return { success: false, error: "Password change failed." };
+    }
+
+    const isValid = await verifyPassword(oldPassword, dbUser.password);
+    if (!isValid) {
+      return { success: false, error: "Password change failed." };
+    }
+
+    const hashed = await hashPassword(newPassword);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { password: hashed },
+    });
+
+    return { success: true, message: "Password changed successfully" };
+  } catch {
+    return { success: false, error: "Password change failed." };
   }
 }

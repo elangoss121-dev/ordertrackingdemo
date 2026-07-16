@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
@@ -19,6 +19,7 @@ export function RegisterForm() {
   const { refreshUser } = useCurrentUser();
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [lockoutTimeLeft, setLockoutTimeLeft] = useState(0);
 
   const {
     register,
@@ -34,7 +35,20 @@ export function RegisterForm() {
     },
   });
 
+  useEffect(() => {
+    if (lockoutTimeLeft <= 0) return;
+    const interval = setInterval(() => {
+      setLockoutTimeLeft((prev) => prev - 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [lockoutTimeLeft]);
+
   const onSubmit = async (data: RegisterInput) => {
+    if (lockoutTimeLeft > 0) {
+      toast.error(`Too many attempts. Try again in ${lockoutTimeLeft} seconds.`);
+      return;
+    }
+
     try {
       setLoading(true);
       const res = await registerUser(data);
@@ -43,6 +57,9 @@ export function RegisterForm() {
         await refreshUser();
         router.push("/dashboard");
       } else {
+        if (res.lockoutSeconds && res.lockoutSeconds > 0) {
+          setLockoutTimeLeft(res.lockoutSeconds);
+        }
         toast.error(res.error);
       }
     } catch {
@@ -131,12 +148,20 @@ export function RegisterForm() {
           )}
         </div>
 
-        <Button type="submit" className="w-full h-11 rounded-xl shadow-sm" disabled={loading}>
+        {lockoutTimeLeft > 0 && (
+          <div className="p-3 text-xs text-destructive bg-destructive/10 border border-destructive/20 rounded-xl text-center font-bold animate-pulse">
+            Too many failed attempts. Locking sign up entries for {lockoutTimeLeft} seconds.
+          </div>
+        )}
+
+        <Button type="submit" className="w-full h-11 rounded-xl shadow-sm" disabled={loading || lockoutTimeLeft > 0}>
           {loading ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               Creating Account...
             </>
+          ) : lockoutTimeLeft > 0 ? (
+            `Locked Out (${lockoutTimeLeft}s)`
           ) : (
             "Sign Up"
           )}

@@ -5,13 +5,54 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Switch } from "@/components/ui/switch";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { useTheme } from "next-themes";
-import { Bell, ShieldCheck, Mail, Smartphone } from "lucide-react";
+import { Bell, ShieldCheck, Mail, Smartphone, Lock } from "lucide-react";
 import { toast } from "sonner";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { changePasswordAction } from "@/actions/auth";
 
 export default function UserSettingsPage() {
   const { theme, setTheme } = useTheme();
   const [emailAlerts, setEmailAlerts] = useState(true);
   const [smsAlerts, setSmsAlerts] = useState(false);
+
+  const [oldPassword, setOldPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
+  const [passwordLoading, setPasswordLoading] = useState(false);
+
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!oldPassword || !newPassword || !confirmNewPassword) {
+      toast.error("Password change failed.");
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      toast.error("Password change failed.");
+      return;
+    }
+    if (newPassword.length < 8) {
+      toast.error("Password change failed.");
+      return;
+    }
+
+    try {
+      setPasswordLoading(true);
+      const res = await changePasswordAction({ oldPassword, newPassword, confirmNewPassword });
+      if (res.success) {
+        toast.success("Password changed successfully");
+        setOldPassword("");
+        setNewPassword("");
+        setConfirmNewPassword("");
+      } else {
+        toast.error("Password change failed.");
+      }
+    } catch {
+      toast.error("Password change failed.");
+    } finally {
+      setPasswordLoading(false);
+    }
+  };
 
   const handleToggle = (type: string, val: boolean) => {
     if (type === "email") {
@@ -77,6 +118,69 @@ export default function UserSettingsPage() {
               </div>
               <Switch checked={smsAlerts} onCheckedChange={(val) => handleToggle("sms", val)} />
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Change Password Settings */}
+        <Card className="glass-panel border-border/40 shadow-lg rounded-3xl md:col-span-2">
+          <CardHeader>
+            <CardTitle className="text-lg font-bold tracking-tight flex items-center gap-2">
+              <Lock className="h-5 w-5 text-primary" />
+              Change Password
+            </CardTitle>
+            <CardDescription className="text-xs">
+              Update your account password to maintain credentials safety.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-6">
+            <form onSubmit={handlePasswordChange} className="space-y-4 max-w-md">
+              <div className="space-y-1">
+                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Old Password
+                </label>
+                <Input
+                  type="password"
+                  value={oldPassword}
+                  onChange={(e) => setOldPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="rounded-xl h-10"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  New Password
+                </label>
+                <Input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="rounded-xl h-10"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Confirm New Password
+                </label>
+                <Input
+                  type="password"
+                  value={confirmNewPassword}
+                  onChange={(e) => setConfirmNewPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="rounded-xl h-10"
+                />
+              </div>
+
+              <Button
+                type="submit"
+                disabled={passwordLoading}
+                className="h-10 px-5 rounded-xl shadow-sm mt-2"
+              >
+                {passwordLoading ? "Updating..." : "Change Password"}
+              </Button>
+            </form>
           </CardContent>
         </Card>
       </div>
