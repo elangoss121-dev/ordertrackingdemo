@@ -40,6 +40,44 @@ export function authRateLimiter(identifier: string): { success: boolean; remaini
   return { success: true, remaining: maxAttempts - record.count };
 }
 
+// 5 wrong password attempts lockout for 30 seconds
+export function loginFailureLimiter(email: string): { success: boolean; remaining: number; resetInSec: number } {
+  const now = Date.now();
+  const key = `fail:${email}`;
+  const record = rateLimit.get(key);
+  const maxAttempts = 5;
+
+  if (!record || now > record.resetTime) {
+    return { success: true, remaining: maxAttempts, resetInSec: 0 };
+  }
+
+  if (record.count >= maxAttempts) {
+    const resetInSec = Math.ceil((record.resetTime - now) / 1000);
+    return { success: false, remaining: 0, resetInSec };
+  }
+
+  return { success: true, remaining: maxAttempts - record.count, resetInSec: 0 };
+}
+
+export function recordLoginFailure(email: string) {
+  const now = Date.now();
+  const key = `fail:${email}`;
+  const record = rateLimit.get(key);
+  const lockoutMs = 30 * 1000; // 30 seconds lockout
+
+  if (!record || now > record.resetTime) {
+    rateLimit.set(key, { count: 1, resetTime: now + lockoutMs });
+  } else {
+    record.count++;
+    record.resetTime = now + lockoutMs;
+  }
+}
+
+export function clearLoginFailures(email: string) {
+  const key = `fail:${email}`;
+  rateLimit.delete(key);
+}
+
 if (typeof setInterval !== "undefined") {
   setInterval(() => {
     const now = Date.now();

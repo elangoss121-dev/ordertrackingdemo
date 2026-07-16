@@ -2,7 +2,7 @@
 
 import { hashPassword, verifyPassword, createSession, destroySession } from "@/lib/auth";
 import { registerSchema, loginSchema } from "@/lib/validations";
-import { authRateLimiter } from "@/lib/rate-limit";
+import { authRateLimiter, loginFailureLimiter, recordLoginFailure, clearLoginFailures } from "@/lib/rate-limit";
 import { sanitizeInput } from "@/lib/utils";
 
 async function getPrisma() {
@@ -19,8 +19,14 @@ export async function register(formData: {
   try {
     const prisma = await getPrisma();
 
+    const failureCheck = loginFailureLimiter(formData.email);
+    if (!failureCheck.success) {
+      return { success: false, error: `Too many failed attempts. Try again in ${failureCheck.resetInSec} seconds.` };
+    }
+
     const validated = registerSchema.safeParse(formData);
     if (!validated.success) {
+      recordLoginFailure(formData.email);
       return { success: false, error: validated.error.issues[0].message };
     }
 
@@ -37,6 +43,7 @@ export async function register(formData: {
     });
 
     if (existingUser) {
+      recordLoginFailure(email);
       return { success: false, error: "An account with this email already exists." };
     }
 
@@ -52,6 +59,7 @@ export async function register(formData: {
     });
 
     await createSession(user.id);
+    clearLoginFailures(email);
 
     return { success: true, message: "Account created successfully!" };
   } catch {
@@ -70,6 +78,11 @@ export async function login(formData: { email: string; password: string }) {
 
     const { email, password } = validated.data;
 
+    const failureCheck = loginFailureLimiter(email);
+    if (!failureCheck.success) {
+      return { success: false, error: `Too many wrong password attempts. Try again in ${failureCheck.resetInSec} seconds.` };
+    }
+
     const rateCheck = authRateLimiter(email);
     if (!rateCheck.success) {
       return { success: false, error: "Too many login attempts. Please try again later." };
@@ -80,13 +93,17 @@ export async function login(formData: { email: string; password: string }) {
     });
 
     if (!user || !user.password) {
+      recordLoginFailure(email);
       return { success: false, error: "Invalid email or password." };
     }
 
     const isValid = await verifyPassword(password, user.password);
     if (!isValid) {
+      recordLoginFailure(email);
       return { success: false, error: "Invalid email or password." };
     }
+
+    clearLoginFailures(email);
 
     await prisma.user.update({
       where: { id: user.id },
